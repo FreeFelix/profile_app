@@ -1,6 +1,6 @@
 # profile_app
 
-![Landing page](./frontend/public/landingpage.png)
+![Landing page](./frontend/public/landlingpage.png)
 
 A Flask-based REST API for user profiles, authentication, and social features.
 
