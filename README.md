@@ -1,5 +1,7 @@
 # profile_app
 
+![Landing page](./public/landlingpage.png)
+
 A Flask-based REST API for user profiles, authentication, and social features.
 
 ## Features
@@ -12,6 +14,7 @@ A Flask-based REST API for user profiles, authentication, and social features.
   - View your own profile
   - Update profile details (name, bio, location, website, career, social links, profile image, etc.)
   - View other users' profiles (with privacy controls)
+![Discover page](./public/diskcoverpage.png)
 
 - **Social Features**
   - Follow and unfollow users
