@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from werkzeug.utils import secure_filename
 import os
-from models import db, User, Follow
+from models import db, User, Follow, Activity, Post
 from auth import token_required
 from config import Config
 from datetime import datetime
@@ -18,54 +18,75 @@ def parse_bool(val):
 @profile_bp.route('/profile', methods=['GET'])
 @token_required
 def get_profile(current_user):
-    user_data = {
-        "name": current_user.name,
-        "email": current_user.email,
-        "bio": current_user.bio,
-        "location": current_user.location,
-        "website": current_user.website,
-        "date_of_birth": current_user.date_of_birth.isoformat() if current_user.date_of_birth else None,
-        "career": current_user.career,
-        "linkedin": current_user.linkedin,
-        "github": current_user.github,
-        "twitter": current_user.twitter,
-        "is_private": current_user.is_private,
-        "theme_pref": current_user.theme_pref,
-        "profile_image": current_user.profile_image
-    }
+    # Get recent activities (limit to 10, newest first)
+    activities = Activity.query.filter_by(user_id=current_user.id).order_by(Activity.timestamp.desc()).limit(10).all()
+    activities_data = [a.to_dict() for a in activities]
+
+    user_data = current_user.to_dict()
+    user_data["activities"] = activities_data
+
     return jsonify(user_data)
 
 @profile_bp.route('/profile', methods=['PUT'])
 @token_required
 def update_profile(current_user):
-    data = request.form
+    # Accept both JSON and form data for flexibility
+    if request.content_type and request.content_type.startswith('application/json'):
+        data = request.get_json()
+        files = {}
+    else:
+        data = request.form
+        files = request.files
+
+    # Debug: print incoming data
+    print("Received data:", data)
+    print("Received files:", files)
+
     # Ensure upload folder exists
     if not os.path.exists(Config.UPLOAD_FOLDER):
         os.makedirs(Config.UPLOAD_FOLDER)
-    if 'profile_image' in request.files:
-        file = request.files['profile_image']
-        if file.filename:
+
+    # Handle profile image upload
+    if 'profile_image' in files:
+        file = files['profile_image']
+        if file and file.filename:
             filename = secure_filename(file.filename)
             file.save(os.path.join(Config.UPLOAD_FOLDER, filename))
-            current_user.profile_image = filename  # Save only filename
-    current_user.name = data.get('name', current_user.name)
-    current_user.bio = data.get('bio', current_user.bio)
-    current_user.location = data.get('location', current_user.location)
-    current_user.website = data.get('website', current_user.website)
-    current_user.career = data.get('career', current_user.career)
-    current_user.linkedin = data.get('linkedin', current_user.linkedin)
-    current_user.github = data.get('github', current_user.github)
-    current_user.twitter = data.get('twitter', current_user.twitter)
-    current_user.theme_pref = data.get('theme_pref', current_user.theme_pref)
+            current_user.profile_image = filename
+
+    # Update fields if present in data
+    for field in [
+        'name', 'bio', 'location', 'website', 'career',
+        'linkedin', 'github', 'twitter', 'theme_pref'
+    ]:
+        if field in data:
+            setattr(current_user, field, data.get(field))
+
+    # Handle boolean and date fields
     if 'is_private' in data:
         current_user.is_private = parse_bool(data.get('is_private'))
-    if 'date_of_birth' in data and data['date_of_birth']:
+
+    if 'date_of_birth' in data and data.get('date_of_birth'):
         try:
-            current_user.date_of_birth = datetime.strptime(data['date_of_birth'], "%Y-%m-%d")
+            current_user.date_of_birth = datetime.strptime(data.get('date_of_birth'), "%Y-%m-%d")
         except ValueError:
             return jsonify({'message': 'Invalid date format. Use YYYY-MM-DD.'}), 400
-    db.session.commit()
-    return jsonify({'message': 'Profile updated successfully'})
+
+    try:
+        db.session.commit()
+        # Log activity
+        activity = Activity(
+            user_id=current_user.id,
+            type="profile_update",
+            description="Profile updated"
+        )
+        db.session.add(activity)
+        db.session.commit()
+        return jsonify({'message': 'Profile updated successfully'})
+    except Exception as e:
+        db.session.rollback()
+        print("DB commit error:", e)
+        return jsonify({'message': 'Failed to update profile', 'error': str(e)}), 500
 
 @profile_bp.route('/profile/<int:user_id>', methods=['GET'])
 @token_required
@@ -73,16 +94,10 @@ def view_profile(current_user, user_id):
     user = User.query.get_or_404(user_id)
     if user.is_private and user.id != current_user.id:
         return jsonify({"message": "This profile is private."}), 403
-    data = {
-        "name": user.name,
-        "bio": user.bio,
-        "career": user.career,
-        "linkedin": user.linkedin,
-        "github": user.github,
-        "twitter": user.twitter,
-        "theme_pref": user.theme_pref,
-        "profile_image": user.profile_image
-    }
+    data = user.to_dict()
+    # Optionally include activities for viewed user
+    activities = Activity.query.filter_by(user_id=user.id).order_by(Activity.timestamp.desc()).limit(10).all()
+    data["activities"] = [a.to_dict() for a in activities]
     return jsonify(data)
 
 @profile_bp.route('/follow/<int:user_id>', methods=['POST'])
@@ -94,6 +109,14 @@ def follow_user(current_user, user_id):
     if exists:
         return jsonify({"message": "Already following."}), 400
     db.session.add(Follow(follower_id=current_user.id, followed_id=user_id))
+    db.session.commit()
+    # Log activity
+    activity = Activity(
+        user_id=current_user.id,
+        type="follow",
+        description=f"Started following user {user_id}"
+    )
+    db.session.add(activity)
     db.session.commit()
     return jsonify({"message": "User followed."})
 
@@ -122,5 +145,4 @@ def get_all_follows(current_user):
     if not current_user.is_admin:
         return jsonify({"message": "Admin access required"}), 403
     follows = Follow.query.all()
-    # Ensure Follow model has a to_dict() method
     return jsonify([follow.to_dict() for follow in follows])
