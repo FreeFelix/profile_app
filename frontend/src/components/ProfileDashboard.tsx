@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom"; // <-- Add this import
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -10,6 +11,7 @@ export const ProfileDashboard = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate(); // <-- Add this line
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -257,6 +259,15 @@ export const ProfileDashboard = () => {
                   <span>Following</span>
                 </div>
                 <Badge variant="secondary">{profile.following}</Badge>
+                {/* View Following button */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="ml-2"
+                  onClick={() => navigate("/following")}
+                >
+                  View Following
+                </Button>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

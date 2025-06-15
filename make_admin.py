@@ -2,7 +2,7 @@ from app import app, db
 from models import User
 
 with app.app_context():
-    user = User.query.filter_by(email="worker3@gmail.com").first()
+    user = User.query.filter_by(email="hagi@gmail.com").first()
     if user:
         user.is_admin = True
         db.session.commit()
