@@ -1,0 +1,215 @@
+openapi: 3.0.3
+info:
+  title: Profile App API
+  version: 1.0.0
+  description: API documentation for the Profile App
+
+servers:
+  - url: http://127.0.0.1:5000
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        bio: { type: string }
+        location: { type: string }
+        website: { type: string }
+        date_of_birth: { type: string, format: date }
+        career: { type: string }
+        profile_image: { type: string }
+        linkedin: { type: string }
+        github: { type: string }
+        twitter: { type: string }
+        is_private: { type: boolean }
+        theme_pref: { type: string }
+        is_admin: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    Follow:
+      type: object
+      properties:
+        id: { type: integer }
+        follower_id: { type: integer }
+        followed_id: { type: integer }
+        created_at: { type: string, format: date-time }
+
+security:
+  - BearerAuth: []
+
+paths:
+  /signup:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '201':
+          description: User created
+        '400':
+          description: User already exists
+
+  /login:
+    post:
+      summary: Login and get JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: Login successful, returns JWT token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+        '401':
+          description: Login failed
+
+  /profile:
+    get:
+      summary: Get current user's profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+
+    put:
+      summary: Update current user's profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                bio: { type: string }
+                profile_image: { type: string, format: binary }
+      responses:
+        '200':
+          description: Profile updated
+        '401':
+          description: Unauthorized
+
+  /profile/{user_id}:
+    get:
+      summary: Get another user's profile
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+
+  /follow/{user_id}:
+    post:
+      summary: Follow a user
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Followed user
+        '401':
+          description: Unauthorized
+
+  /unfollow/{user_id}:
+    delete:
+      summary: Unfollow a user
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Unfollowed user
+        '401':
+          description: Unauthorized
+
+  /admin/all_users:
+    get:
+      summary: Get all users (admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '403':
+          description: Admin access required
+
+  /admin/all_follows:
+    get:
+      summary: Get all follows (admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of follows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Follow'
+        '403':
+          description: Admin access required

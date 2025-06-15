@@ -1,7 +1,7 @@
 from flask import Flask
 from models import db
 from auth import auth_bp
-from profile import profile_bp
+from profile_1 import profile_bp
 from config import Config
 from api.v1 import v1_bp
 import os

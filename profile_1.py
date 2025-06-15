@@ -8,6 +8,13 @@ from datetime import datetime
 
 profile_bp = Blueprint('profile', __name__)
 
+def parse_bool(val):
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        return val.lower() in ['true', '1', 'yes']
+    return False
+
 @profile_bp.route('/profile', methods=['GET'])
 @token_required
 def get_profile(current_user):
@@ -32,12 +39,15 @@ def get_profile(current_user):
 @token_required
 def update_profile(current_user):
     data = request.form
+    # Ensure upload folder exists
+    if not os.path.exists(Config.UPLOAD_FOLDER):
+        os.makedirs(Config.UPLOAD_FOLDER)
     if 'profile_image' in request.files:
         file = request.files['profile_image']
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(Config.UPLOAD_FOLDER, filename)
-        file.save(file_path)
-        current_user.profile_image = file_path
+        if file.filename:
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(Config.UPLOAD_FOLDER, filename))
+            current_user.profile_image = filename  # Save only filename
     current_user.name = data.get('name', current_user.name)
     current_user.bio = data.get('bio', current_user.bio)
     current_user.location = data.get('location', current_user.location)
@@ -47,9 +57,13 @@ def update_profile(current_user):
     current_user.github = data.get('github', current_user.github)
     current_user.twitter = data.get('twitter', current_user.twitter)
     current_user.theme_pref = data.get('theme_pref', current_user.theme_pref)
-    current_user.is_private = data.get('is_private', str(current_user.is_private)).lower() == 'true'
-    if 'date_of_birth' in data:
-        current_user.date_of_birth = datetime.strptime(data['date_of_birth'], "%Y-%m-%d")
+    if 'is_private' in data:
+        current_user.is_private = parse_bool(data.get('is_private'))
+    if 'date_of_birth' in data and data['date_of_birth']:
+        try:
+            current_user.date_of_birth = datetime.strptime(data['date_of_birth'], "%Y-%m-%d")
+        except ValueError:
+            return jsonify({'message': 'Invalid date format. Use YYYY-MM-DD.'}), 400
     db.session.commit()
     return jsonify({'message': 'Profile updated successfully'})
 
@@ -102,18 +116,11 @@ def list_users(current_user):
     result = [{"id": u.id, "email": u.email, "is_admin": u.is_admin} for u in users]
     return jsonify(result)
 
-@profile_bp.route('/admin/all_users', methods=['GET'])
-@token_required
-def get_all_users(current_user):
-    if not current_user.is_admin:
-        return jsonify({"message": "Admin access required"}), 403
-    users = User.query.all()
-    return jsonify([user.to_dict() for user in users])
-
 @profile_bp.route('/admin/all_follows', methods=['GET'])
 @token_required
 def get_all_follows(current_user):
     if not current_user.is_admin:
         return jsonify({"message": "Admin access required"}), 403
     follows = Follow.query.all()
+    # Ensure Follow model has a to_dict() method
     return jsonify([follow.to_dict() for follow in follows])
