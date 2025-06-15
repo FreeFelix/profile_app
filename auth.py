@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash, secure_filename
 from models import db, User
 import jwt
+import os
 from datetime import datetime, timedelta, UTC
 from functools import wraps
 from config import Config
@@ -28,13 +29,29 @@ def token_required(f):
 
 @auth_bp.route('/signup', methods=['POST'])
 def signup():
-    data = request.get_json()
+    # Accept form data for file upload
+    data = request.form
     if not data or not data.get('email') or not data.get('password') or not data.get('name'):
         return jsonify({'message': 'Name, email, and password required!'}), 400
     if User.query.filter_by(email=data['email']).first():
         return jsonify({'message': 'User already exists'}), 400
     hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
-    new_user = User(name=data['name'], email=data['email'], password_hash=hashed_password)
+    profile_image = None
+    if 'profile_image' in request.files:
+        file = request.files['profile_image']
+        if file.filename:
+            # Ensure upload folder exists
+            if not os.path.exists(Config.UPLOAD_FOLDER):
+                os.makedirs(Config.UPLOAD_FOLDER)
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(Config.UPLOAD_FOLDER, filename))
+            profile_image = filename
+    new_user = User(
+        name=data['name'],
+        email=data['email'],
+        password_hash=hashed_password,
+        profile_image=profile_image
+    )
     db.session.add(new_user)
     db.session.commit()
     return jsonify({'message': 'User created successfully'}), 201
